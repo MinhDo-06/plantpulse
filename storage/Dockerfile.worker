@@ -1,0 +1,8 @@
+FROM python:3.13-slim
+
+RUN pip install --no-cache-dir confluent-kafka sqlalchemy pymysql cryptography pyyaml
+
+WORKDIR /app
+COPY . /app
+
+CMD ["python", "worker.py"]

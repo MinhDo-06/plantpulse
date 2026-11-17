@@ -1,0 +1,17 @@
+[project]
+name = "acit3855-project"
+version = "0.1.0"
+description = "Plant water sensor microservices (ACIT3855)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "connexion[swagger-ui,uvicorn]>=3.3.0",
+    "filelock>=3.32.6",
+    "requests>=2.34.2",
+    "rfc3339-validator>=0.1.4",
+]
+
+[tool.uv.workspace]
+members = [
+    "storage",
+]

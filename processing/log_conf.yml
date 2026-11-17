@@ -1,0 +1,35 @@
+version: 1
+formatters:
+  simple:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stdout
+loggers:
+  uvicorn:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  uvicorn.access:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  connexion:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  httpx:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  httpcore:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+root:
+  level: DEBUG
+  handlers: [console]
+disable_existing_loggers: false

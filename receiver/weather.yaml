@@ -1,0 +1,95 @@
+openapi: 3.0.0
+info:
+    title: Plant water sensor API
+    description: Receives precipitation and soil moisture sensor readings 
+    version: 1.0.0
+
+paths:
+    /status:
+        get:
+            summary: Health check
+            operationId: receiver.get_status
+            responses:
+                '200':
+                    description: service is up
+                    
+    /sensor/precipitation:
+        post:
+            summary: Records a single precipitation reading
+            operationId: receiver.report_precipitation
+            description: Adds a precipitation reading
+            requestBody: 
+                content: 
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PrecipitationReading'
+            responses: 
+                '201': 
+                    description: precipitation reading successfully received 
+                '400': 
+                    description: 'invalid input, object invalid'
+    
+    /sensor/soil-moisture:
+        post:
+            summary: Records a single moisture reading
+            operationId: receiver.report_soil_moisture
+            description: Adds a soil moisture reading
+            requestBody: 
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SoilMoistureReading'
+            responses:
+                '201': 
+                    description: soil moisture reading successfully received
+                '400':
+                    description: 'invalid input, object invalid'
+
+components:
+    schemas:
+        PrecipitationReading:
+            type: object
+            required: 
+                - sensor_id
+                - garden_zone
+                - rainfall_mm
+                - timestamp
+            properties:
+                sensor_id: 
+                    type: string 
+                    format: uuid
+                    pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                    example: "d290f1ee-6c54-4b01-90e6-d701748f0851"
+                garden_zone:
+                    type: string
+                    example: "front-bed"
+                rainfall_mm:
+                    type: number
+                    example: 4.2
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-09-08T09:12:33.001-07:00"
+        SoilMoistureReading:
+            type: object
+            required:
+            - sensor_id 
+            - garden_zone
+            - moisture_percent
+            - timestamp
+            properties:
+                sensor_id: 
+                    type: string
+                    format: uuid
+                    pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                    example: "a1b2c3d4-6c54-4b01-90e6-d701748f0851"
+                garden_zone: 
+                    type: string
+                    example: "front-bed"
+                moisture_percent:
+                    type: number
+                    example: 38.5
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-09-07T09:15:00.001-07:00"

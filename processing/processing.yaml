@@ -1,0 +1,59 @@
+openapi: 3.0.0
+info:
+    title: Plant water sensor Statistics API
+    description: Aggregate statistics computed from the storage service
+    version: 1.0.0
+
+paths:
+    /status:
+        get:
+            summary: Health check
+            operationId: processing.get_status
+            responses:
+                '200':
+                    description: service is up
+
+    /stats:
+        get:
+            summary: Get aggregate sensor statistics
+            operationId: processing.get_stats
+            responses:
+                '200':
+                    description: Aggregate statistics
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProcessingStats'
+
+components:
+    schemas:
+        ProcessingStats:
+            type: object
+            required:
+                - num_precipitation_readings
+                - num_soil_moisture_readings
+                - max_rainfall_mm
+                - avg_moisture_percent
+                - last_updated_precipitation
+                - last_updated_soil_moisture
+            properties:
+                num_precipitation_readings:
+                    type: integer
+                    example: 200
+                num_soil_moisture_readings:
+                    type: integer
+                    example: 200
+                max_rainfall_mm:
+                    type: number
+                    example: 99.9
+                avg_moisture_percent:
+                    type: number
+                    example: 50.2
+                last_updated_precipitation:
+                    type: string
+                    format: date-time
+                    example: "2026-10-25T02:11:04.558123+00:00"
+                last_updated_soil_moisture:
+                    type: string
+                    format: date-time
+                    example: "2026-10-25T02:11:04.596123+00:00"

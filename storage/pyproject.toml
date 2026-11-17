@@ -1,0 +1,12 @@
+[project]
+name = "storage"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "connexion[swagger-ui,uvicorn]>=3.3.0",
+    "cryptography>=50.0.2",
+    "pymysql>=1.2.3",
+    "rfc3339-validator>=0.1.4",
+    "sqlalchemy>=2.0.54",
+]

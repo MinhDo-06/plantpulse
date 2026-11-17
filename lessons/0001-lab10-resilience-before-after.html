@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 10 — Fault Tolerance: Before / After</title>
+<style>
+  :root{
+    --ink:#1a2332; --muted:#5b6b7f; --paper:#faf9f6; --card:#ffffff;
+    --old:#8c3b3b; --old-bg:#f7ecec; --new:#2f6b4f; --new-bg:#ecf4ef;
+    --accent:#3d5a80; --line:#d8d4cc; --warn:#a05a00; --warn-bg:#fdf3e3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.65 Georgia,'Times New Roman',serif;padding:0 0 4rem}
+  main{max-width:980px;margin:0 auto;padding:0 1.5rem}
+  header{border-bottom:3px double var(--line);margin-bottom:2.5rem;padding:3rem 0 1.5rem}
+  h1{font-family:'Palatino Linotype',Palatino,serif;font-weight:600;
+    font-size:2rem;margin:0 0 .3rem;letter-spacing:.01em}
+  .sub{color:var(--muted);font-style:italic;margin:0}
+  h2{font-family:'Palatino Linotype',Palatino,serif;font-weight:600;font-size:1.4rem;
+    margin:3.5rem 0 1rem;padding-top:.5rem;border-top:1px solid var(--line)}
+  h2 .no{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:.5rem}
+  h3{font-size:1.05rem;margin:1.6rem 0 .5rem}
+  .lede{font-size:1.05rem;color:var(--muted)}
+  code,.mono{font-family:Consolas,'Courier New',monospace;font-size:.86em;
+    background:#f0ede6;padding:.1em .35em;border-radius:3px}
+  /* pipeline diagram */
+  .pipeline{display:flex;align-items:stretch;gap:.4rem;flex-wrap:wrap;margin:1.2rem 0}
+  .node{flex:1 1 110px;min-width:100px;border-radius:8px;padding:.6rem .5rem;text-align:center;
+    border:1.5px solid;display:flex;flex-direction:column;justify-content:center}
+  .node b{display:block;font-size:.9rem}
+  .node small{color:var(--muted);font-size:.72rem;line-height:1.3;display:block;margin-top:.15rem}
+  .n-old{background:var(--old-bg);border-color:var(--old)}
+  .n-new{background:var(--new-bg);border-color:var(--new)}
+  .n-neutral{background:var(--card);border-color:var(--line)}
+  .arrow{align-self:center;color:var(--muted);font-size:1.1rem;flex:0 0 auto}
+  .pipe-label{font-size:.75rem;color:var(--muted);font-style:italic;margin-top:.3rem}
+  /* before/after panels */
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin:1rem 0}
+  @media(max-width:720px){.panels{grid-template-columns:1fr}}
+  .panel{border-radius:10px;padding:1rem 1.2rem;border:1.5px solid}
+  .panel.old{background:var(--old-bg);border-color:var(--old)}
+  .panel.new{background:var(--new-bg);border-color:var(--new)}
+  .panel h3{margin:.1rem 0 .6rem;font-size:1rem;text-transform:uppercase;letter-spacing:.08em}
+  .panel.old h3{color:var(--old)} .panel.new h3{color:var(--new)}
+  .panel ul{margin:.3rem 0;padding-left:1.1rem}
+  .panel li{margin:.45rem 0;font-size:.92rem}
+  /* decision card */
+  .decision{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:8px;padding:1.1rem 1.3rem;margin:1.4rem 0}
+  .decision .tag{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+  .ba{display:grid;grid-template-columns:1fr 24px 1fr;gap:.4rem;align-items:center;margin:.8rem 0}
+  .ba .cell{border-radius:6px;padding:.5rem .7rem;font-size:.86rem}
+  .ba .b{background:var(--old-bg);border:1px solid var(--old)}
+  .ba .a{background:var(--new-bg);border:1px solid var(--new)}
+  .ba .mid{color:var(--muted);text-align:center}
+  .how{border-top:1px dashed var(--line);margin-top:.8rem;padding-top:.7rem}
+  .how .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+  .flow{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:.5rem 0;font-size:.85rem}
+  .flow .step{background:#f0ede6;border:1px solid var(--line);border-radius:5px;padding:.3rem .55rem}
+  .flow .step.ok{background:var(--new-bg);border-color:var(--new)}
+  .flow .step.bad{background:var(--old-bg);border-color:var(--old)}
+  .flow .arr{color:var(--muted)}
+  /* tables */
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.88rem}
+  th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:'Palatino Linotype',Palatino,serif;font-size:.78rem;text-transform:uppercase;
+    letter-spacing:.07em;color:var(--muted);border-bottom:2px solid var(--line)}
+  td .ok{color:var(--new);font-weight:bold} td .bad{color:var(--old);font-weight:bold}
+  /* timeline */
+  .timeline{border-left:2px solid var(--line);margin:1rem 0 1rem .4rem;padding-left:1.2rem}
+  .tl-item{position:relative;margin:0 0 1rem}
+  .tl-item::before{content:'';position:absolute;left:-1.62rem;top:.42rem;width:.62rem;height:.62rem;
+    border-radius:50%;background:var(--accent)}
+  .tl-item.down::before{background:var(--old)} .tl-item.up::before{background:var(--new)}
+  .tl-item .t{font-size:.78rem;color:var(--muted);font-family:Consolas,monospace}
+  .note{background:var(--warn-bg);border:1px solid #e5c78e;border-radius:8px;
+    padding:.8rem 1rem;margin:1.2rem 0;font-size:.9rem}
+  .note b{color:var(--warn)}
+  .ask{background:#eef1f6;border:1px solid var(--line);border-radius:8px;
+    padding:.8rem 1rem;margin:2.5rem 0 0;font-size:.92rem;font-style:italic}
+  .src{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);
+    margin-top:2.5rem;padding-top:1rem}
+  @media print{body{background:#fff} .decision{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Lab 10 — Fault Tolerance &amp; Resilience</h1>
+  <p class="sub">ACIT 3855 · plant-water-sensor platform · before → after, decision by decision</p>
+</header>
+
+<p class="lede">
+  One idea drives everything in this lab: <em>healthchecks only protect startup — they say
+  nothing about what happens when a dependency dies while you are running.</em>
+  The old design was correct on the happy path but brittle: one dead service took others
+  down with it, and data could vanish silently. The new design has one behaviour per failure,
+  chosen in advance.
+</p>
+
+<!-- ============ ARCHITECTURE ============ -->
+<h2><span class="no">§1</span>The pipeline, before and after</h2>
+
+<p>The data path is identical in both designs. What changes is what each arrow does
+when the next box is missing.</p>
+
+<div class="pipeline">
+  <div class="node n-neutral"><b>sensor / JMeter</b><small>POST events</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>receiver :8080</b><small>trace_id, produce</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>Kafka (Redpanda)</b><small>2 topics</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>storage-worker</b><small>consume → MySQL</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>MySQL</b><small>readings</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>storage API :8090</b><small>GET /sensor/…?after=</small></div>
+  <div class="arrow">→</div>
+  <div class="node n-neutral"><b>processing :8100</b><small>stats JSON, /stats</small></div>
+</div>
+
+<div class="panels">
+  <div class="panel old">
+    <h3>Before — brittle</h3>
+    <ul>
+      <li>Producer uses bare <code>send()</code> — fire-and-forget into a buffer; nobody checks delivery</li>
+      <li>If Kafka is down at startup, <code>producer.start()</code> crashes the receiver — and nothing restarts it</li>
+      <li>DB-down on a GET raises <code>OperationalError</code> → client sees a <b>500 + stack trace</b></li>
+      <li>A duplicate Kafka message <b>crash-loops the worker forever</b> (no dedup, crash → re-read → crash)</li>
+      <li>Only the storage-worker has <code>restart: on-failure</code></li>
+    </ul>
+  </div>
+  <div class="panel new">
+    <h3>After — resilient</h3>
+    <ul>
+      <li>Producer is idempotent; sends are <code>send_and_wait</code> with a 5&nbsp;s deadline</li>
+      <li>Kafka-down startup still refuses to start — but Docker retries until Kafka is back</li>
+      <li>Dependencies-down return clean <b>503s</b>; <code>/status</code> always answers</li>
+      <li>Duplicates are absorbed by a unique <code>trace_id</code>; offsets only move after a successful write</li>
+      <li>Every Python service restarts on failure</li>
+    </ul>
+  </div>
+</div>
+
+<p class="pipe-label">Key invariant carried through every decision below: <b>the Kafka offset is only committed
+after the data is safely in MySQL.</b> That single rule is why no message is ever lost between Kafka and the database.</p>
+
+<!-- ============ DECISIONS ============ -->
+<h2><span class="no">§2</span>The decisions, and how each one works</h2>
+
+<div class="decision">
+  <span class="tag">Decision 1 — startup behaviour</span>
+  <h3>Refuse to start, let Docker retry</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> receiver crashes at boot when Redpanda isn't ready; container stays dead. Worker restarts, others don't.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> same crash is now the <em>mechanism</em>: exit non-zero, <code>restart: on-failure</code> on all four Python services brings each back until its dependency is up.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step">container starts</span><span class="arr">→</span>
+      <span class="step bad">dependency missing → raise, exit ≠ 0</span><span class="arr">→</span>
+      <span class="step">Docker sees non-zero exit</span><span class="arr">→</span>
+      <span class="step">restarts with backoff</span><span class="arr">→</span>
+      <span class="step ok">dependency up → app stays up</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0">Note the receiver's <code>lifespan</code> needs
+    <em>no</em> retry loop — the crash <em>is</em> the retry. One mechanism, identical everywhere.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 2 — Kafka down, receiver</span>
+  <h3>Return 503 and accept the loss</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> <code>send()</code> queues into a client buffer and returns <code>201</code> — the event silently dies with the buffer. Client believes it was stored.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> POST returns <b>503</b> during the outage — honest failure. Once Kafka is back, sends succeed again. Events sent <em>during</em> the outage are accepted as lost.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step">POST arrives</span><span class="arr">→</span>
+      <span class="step"><code>send_and_wait</code> in <code>wait_for(…, 5)</code></span><span class="arr">→</span>
+      <span class="step bad">KafkaError / TimeoutError</span><span class="arr">→</span>
+      <span class="step"><code>logger.exception</code></span><span class="arr">→</span>
+      <span class="step bad">503 "temporarily unavailable"</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0"><code>send_and_wait</code> actually waits for broker
+    acknowledgement (unlike <code>send</code>, which only fills the buffer). The 5&nbsp;s deadline bounds
+    how long a client waits before being told no. The receiver is the platform's
+    <b>SPOF</b> — the lab explicitly prices this outage as acceptable data loss.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 3 — MySQL down, storage-worker</span>
+  <h3>Hold the offset, replay on recovery</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> any DB error → <code>raise</code> → container exits. Fine for transient errors, but a re-delivered duplicate crash-loops the worker forever.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> transient DB errors are retried in-process with backoff (5 attempts, capped at 30&nbsp;s). Duplicates are absorbed by the unique key. The offset never advances past an unstored message.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works — the message journey</span>
+    <div class="flow">
+      <span class="step ok">poll message</span><span class="arr">→</span>
+      <span class="step">save to MySQL</span><span class="arr">→</span>
+      <span class="step ok">success → commit offset</span>
+    </div>
+    <div class="flow">
+      <span class="step ok">poll message</span><span class="arr">→</span>
+      <span class="step bad">DB down → no commit</span><span class="arr">→</span>
+      <span class="step">backoff, retry in-process</span><span class="arr">→</span>
+      <span class="step ok">DB back → same message saved → commit</span>
+    </div>
+    <div class="flow">
+      <span class="step ok">poll duplicate</span><span class="arr">→</span>
+      <span class="step"><code>IntegrityError</code> on unique trace_id</span><span class="arr">→</span>
+      <span class="step">rollback</span><span class="arr">→</span>
+      <span class="step ok">commit offset, skip (already stored)</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0">This third flow is what breaks the crash-loop:
+    without it, "saved but offset not committed" re-delivers the same message forever.
+    Kafka restarts mid-way are also covered: with <code>auto.offset.reset: earliest</code>
+    and no auto-commit, the worker re-reads from the last commit — replay, not loss.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 4 — MySQL down, storage API</span>
+  <h3>GET returns 503, not 500</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> <code>OperationalError</code> escapes the endpoint → framework default → <b>500</b> with a stack trace; JMeter counts it as a server bug.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> DB errors are caught → clean <b>503</b>, logged with context. <code>/status</code> still returns 200, so the container stays healthy.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step">GET /sensor/…</span><span class="arr">→</span>
+      <span class="step bad">query raises OperationalError</span><span class="arr">→</span>
+      <span class="step">except → logger.exception</span><span class="arr">→</span>
+      <span class="step bad">503</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0">Semantics: 500 means <em>"I am broken"</em>;
+    503 means <em>"I am fine, my dependency isn't — try again"</em>. Downstream, processing's
+    <code>raise_for_status()</code> turns the 503 into a skipped cycle (decision 5) instead of a crash.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 5 — Storage down, processing</span>
+  <h3>Skip the cycle, never reset the stats</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> an unhandled fetch error kills the update loop → statistics freeze <em>and</em> the endpoint may die with them.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> every cycle is wrapped: any error → log, sleep <code>INTERVAL_SECONDS</code>, try again. Stats file is never flushed, so recovery is automatic.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step">cycle starts</span><span class="arr">→</span>
+      <span class="step bad">fetch fails (503 / timeout)</span><span class="arr">→</span>
+      <span class="step"><code>logger.error</code></span><span class="arr">→</span>
+      <span class="step">sleep 10 s</span><span class="arr">→</span>
+      <span class="step ok">next cycle resumes from last timestamp</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0"><b>Already implemented</b> in
+    <code>update_loop</code> — this decision needed no code. The polling uses
+    <code>?after=&lt;last_updated&gt;</code>, so after any outage the first successful fetch
+    pulls <em>everything</em> missed during it: no gap, no double-count. Stats writes use a
+    temp-file swap, so even a crash mid-write can't corrupt the file.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 6 — degraded-mode map</span>
+  <h3>Minimal 503; /status always alive</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> failure semantics undefined — a service with one dead dependency behaves unpredictably across its endpoints.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> each service degrades <em>exactly</em> the endpoints that cannot work, and nothing more.</div>
+  </div>
+  <div class="how"><span class="lbl">The map</span>
+    <table>
+      <tr><th>Outage</th><th>receiver</th><th>storage API</th><th>processing</th></tr>
+      <tr><td>Kafka down</td><td><span class="bad">POST → 503</span></td><td><span class="ok">GET works (reads MySQL)</span></td><td><span class="ok">works (data just stops flowing)</span></td></tr>
+      <tr><td>MySQL down</td><td><span class="ok">POST works (into Kafka)</span></td><td><span class="bad">GET → 503</span></td><td>pauses, via the 503</td></tr>
+      <tr><td>storage API down</td><td><span class="ok">POST works</span></td><td>—</td><td>skips cycles</td></tr>
+      <tr><td>any outage</td><td colspan="3"><span class="ok">/status → 200 everywhere</span> (healthcheck passes, Docker doesn't kill a live service)</td></tr>
+    </table>
+    <p style="font-size:.9rem;margin:.4rem 0 0">Why minimal matters: when Kafka dies, MySQL is
+    still fine — so old events remain queryable. Degrad <em>only</em> what the outage actually breaks.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 7 — outage detection</span>
+  <h3>Detect at use-time, plus pool_pre_ping</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> no active health polling; a pooled MySQL connection could be stale after a DB restart and fail on first use.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> no separate "is it up?" loops — every operation is wrapped in try/except at the moment it runs. <code>pool_pre_ping=True</code> validates each pooled connection before use.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step">operation starts</span><span class="arr">→</span>
+      <span class="step ok">works → result</span>
+      <span class="arr">&nbsp;|&nbsp;</span>
+      <span class="step bad">fails → except → degrade</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0">One code path per dependency, no drift between a
+    health-flag and reality. <code>pool_pre_ping</code> solves the specific case where MySQL
+    restarted but SQLAlchemy hands you a dead connection from the pool.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 8 — logging contract</span>
+  <h3>Log context, never leak stack traces</h3>
+  <div class="ba">
+    <div class="cell b"><b>Before:</b> framework default surfaces a 500 + traceback to the client; logs may lack the context of <em>which</em> dependency failed.</div>
+    <div class="cell mid">→</div>
+    <div class="cell a"><b>After:</b> every handler catches, logs with <code>logger.exception</code> (full trace <em>in the log only</em>), and returns a clean status code.</div>
+  </div>
+  <div class="how"><span class="lbl">How it works</span>
+    <div class="flow">
+      <span class="step bad">error occurs</span><span class="arr">→</span>
+      <span class="step"><code>logger.exception("Kafka unavailable, rejecting reading")</code></span><span class="arr">→</span>
+      <span class="step ok">client: 503, no trace</span>
+    </div>
+    <p style="font-size:.9rem;margin:.4rem 0 0">This is the lab's observability criterion:
+    during a chaos test, the logs alone must tell you which service is degraded and why.</p>
+  </div>
+</div>
+
+<div class="decision">
+  <span class="tag">Decision 9 — retry parameters</span>
+  <h3>Lab defaults, adopted as-is</h3>
+  <table>
+    <tr><th>Where</th><th>Parameter</th><th>Value</th><th>Why</th></tr>
+    <tr><td>receiver</td><td><code>enable_idempotence</code></td><td><code>True</code></td><td>producer ID + sequence numbers prevent broker-side duplicates on retry</td></tr>
+    <tr><td>receiver</td><td><code>request_timeout_ms</code></td><td>10 000</td><td>upper bound on a broker round-trip attempt</td></tr>
+    <tr><td>receiver</td><td><code>retry_backoff_ms</code> / <code>linger_ms</code></td><td>250 / 5</td><td>pause between retries; tiny batching delay</td></tr>
+    <tr><td>receiver</td><td>send deadline</td><td><code>wait_for(…, 5)</code></td><td>client isn't left hanging when the broker is gone</td></tr>
+    <tr><td>worker</td><td>DB retries</td><td>5 × <code>min(2ⁿ, 30)</code>s</td><td>rides out a MySQL restart (~seconds) without container churn</td></tr>
+  </table>
+</div>
+
+<!-- ============ WALKTHROUGH ============ -->
+<h2><span class="no">§3</span>Putting it together: one chaos timeline</h2>
+
+<p>The lab's test is exactly this: kill services in any order under JMeter load and watch
+the platform bend, not break. One pass through the worst-looking scenario:</p>
+
+<div class="timeline">
+  <div class="tl-item down"><span class="t">t₀ — MySQL goes down</span><br>
+    Worker stops committing offsets (messages pile up in Kafka, unlost). Storage API returns 503.
+    Processing skips its cycles. Receiver keeps accepting POSTs — clients notice nothing.</div>
+  <div class="tl-item down"><span class="t">t₁ — storage service stopped too</span><br>
+    Still fine: receiver → Kafka buffered; nothing else is affected. Kafka is the shock absorber.</div>
+  <div class="tl-item up"><span class="t">t₂ — MySQL back up</span><br>
+    Worker retries succeed, replays every pending Kafka message into the DB. Storage API returns 200 again.</div>
+  <div class="tl-item down"><span class="t">t₃ — Kafka goes down</span><br>
+    Receiver degrades: POST → 503. Worker just sees an empty poll. Everything already in Kafka/MySQL is safe.</div>
+  <div class="tl-item up"><span class="t">t₄ — Kafka back up</span><br>
+    aiokafka reconnects on its own; receiver resumes; processing's next cycle pulls everything since
+    <code>last_updated</code>. Statistics were never reset — the gap closes itself.</div>
+</div>
+
+<div class="note"><b>Why nothing was lost:</b> at every instant, each message lived in at least one
+durable place — Kafka (persistent log) or MySQL — and the offset only ever advanced
+<em>after</em> the database confirmed the write. The only accepted loss is the receiver's
+503 window in t₃, and the client was told <code>503</code>, not a lie.</div>
+
+<h2><span class="no">§4</span>Primary source</h2>
+<p>The lab handout itself — <em>ACIT 3855, Lab 10: Fault tolerance and resilience</em>
+(Tim Guicherd) — is the reference for every parameter in decision 9 and for the
+scenario/acceptance table in §3. Deeper background:
+<a href="https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html">confluent-kafka Python docs</a>
+(offsets, commits) and
+<a href="https://aiokafka.readthedocs.io/en/stable/">aiokafka docs</a> (idempotence, producer lifecycle).</p>
+
+<p class="ask">💬 Anything here unclear? Ask your agent — that's what it's for. Follow-ups on any
+decision, the timeline, or the code it maps to are fair game.</p>
+
+<p class="src">Companion to the resilience policy in <code>README.md</code> · Lab 10 · decisions 1–9 map one-to-one to the Part 2 implementation checklist.</p>
+
+</main>
+</body>
+</html>

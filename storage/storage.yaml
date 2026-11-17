@@ -1,0 +1,125 @@
+openapi: 3.0.0
+info:
+    title: Plant water sensor Storage API
+    description: Stores precipitation and soil moisture sensor readings in a database
+    version: 1.0.0
+
+paths:
+    /status:
+        get:
+            summary: Health check
+            operationId: storage.get_status
+            responses:
+                '200':
+                    description: service is up
+                    
+    /sensor/precipitation:
+        get:
+            summary: Get precipitation readings recorded after a timestamp
+            operationId: storage.get_precipitation_readings
+            parameters:
+                - in: query
+                  name: after
+                  required: false
+                  schema: 
+                    type: string
+                    format: date-time
+                  description: Only readings recorded after this UTC timestamp, e.g. 2026-10-25T02:11:04.5Z
+            responses: 
+                '200':
+                    description: List of precipitation readings 
+                    content: 
+                        application/json:
+                            schema:
+                                type: array
+                                items: 
+                                    $ref: '#/components/schemas/PrecipitationReading'
+
+    /sensor/soil-moisture:
+        get:
+            summary: Get soil moisture readings recorded after a timestamp
+            operationId: storage.get_soil_moisture_readings
+            parameters:
+                - in: query
+                  name: after
+                  required: false
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Only readings recorded after this UTC timestamp, e.g. 2026-10-25T02:11:04.5Z
+            responses:
+                '200':
+                    description: List of soil moisture readings
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SoilMoistureReading'
+
+components:
+    schemas:
+        PrecipitationReading:
+            type: object
+            required:
+                - sensor_id
+                - garden_zone
+                - rainfall_mm
+                - timestamp
+                - trace_id
+            properties:
+                sensor_id:
+                    type: string
+                    format: uuid
+                    pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                    example: "d290f1ee-6c54-4b01-90e6-d701748f0851"
+                garden_zone:
+                    type: string
+                    example: "front-bed"
+                rainfall_mm:
+                    type: number
+                    example: 4.2
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-09-08T09:12:33.001-07:00"
+                recorded_timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-10-25T02:11:04.558123+00:00"
+                trace_id:
+                    type: integer
+                    format: int64
+                    example: 1791075895540000000
+        SoilMoistureReading:
+            type: object
+            required:
+                - sensor_id
+                - garden_zone
+                - moisture_percent
+                - timestamp
+                - trace_id
+            properties:
+                sensor_id:
+                    type: string
+                    format: uuid
+                    pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                    example: "a1b2c3d4-6c54-4b01-90e6-d701748f0851"
+                garden_zone:
+                    type: string
+                    example: "front-bed"
+                moisture_percent:
+                    type: number
+                    example: 38.5
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-09-07T09:15:00.001-07:00"
+                recorded_timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-10-25T02:11:04.558123+00:00"
+                trace_id:
+                    type: integer
+                    format: int64
+                    example: 1791075895540000000
