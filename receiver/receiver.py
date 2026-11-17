@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import logging.config
@@ -8,6 +9,7 @@ from contextlib import asynccontextmanager
 import connexion
 import yaml
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaError
 from connexion import NoContent, request
 
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "redpanda:9092")
@@ -21,27 +23,44 @@ logger = logging.getLogger("receiver")
 
 @asynccontextmanager
 async def lifespan(app):
-    producer = AIOKafkaProducer(bootstrap_servers=[KAFKA_BROKER])
-    await producer.start()
+    producer = AIOKafkaProducer(
+        bootstrap_servers=[KAFKA_BROKER],
+        # Producer ID + sequence numbers prevent broker-side duplicates
+        enable_idempotence=True,
+        # Upper bound on a broker round-trip attempt
+        request_timeout_ms=10_000,
+        retry_backoff_ms=250,
+        linger_ms=5,
+    )
+    await producer.start() # Kafka down -> crash -> Docker restart 
     try:
-        yield {"kafka": producer}
+        yield{"kafka": producer}
     finally:
         await producer.stop()
 
 
 async def report_precipitation(body):
     body["trace_id"] = time.time_ns()
-    logger.info("Received 'precipitation' event - rainfall %s mm | trace_id: %s",
-                body["rainfall_mm"], body["trace_id"])
-    await request.state.kafka.send(KAFKA_TOPIC_PRECIP, json.dumps(body).encode("utf-8"))
+    logger.info("Received 'precipitation' event - rainfall %s mm | trace_id: %s", body["rainfall_mm"], body["trace_id"]) 
+    producer = request.state.kafka
+    payload = json.dumps(body).encode("utf-8")
+    try:
+        await asyncio.wait_for(producer.send_and_wait(KAFKA_TOPIC_PRECIP, payload), timeout=5)
+    except (KafkaError, asyncio.TimeoutError):
+        logger.exception("Kafka unavailable, rejecting 'precipitation' event ")
+        return {"error": "temporarily unavailable"}, 503
     return NoContent, 201
-
 
 async def report_soil_moisture(body):
     body["trace_id"] = time.time_ns()
-    logger.info("Received 'soil moisture' event - moisture: %s%% | trace_id: %s",
-                body["moisture_percent"], body["trace_id"])
-    await request.state.kafka.send(KAFKA_TOPIC_SOIL, json.dumps(body).encode("utf-8"))
+    logger.info("Received 'soil moisture' event - moisture: %s%% | trace_id: %s", body["moisture_percent"], body["trace_id"])
+    producer = request.state.kafka
+    payload = json.dumps(body).encode("utf-8")
+    try:
+        await asyncio.wait_for(producer.send_and_wait(KAFKA_TOPIC_SOIL, payload), timeout=5)
+    except (KafkaError, asyncio.TimeoutError):
+        logger.exception("Kafka unavailable, rejecting 'soil moisture' event")
+        return {"error": "temporarily unavailable"}, 503
     return NoContent, 201
 
 

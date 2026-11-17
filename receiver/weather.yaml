@@ -28,6 +28,8 @@ paths:
                     description: precipitation reading successfully received 
                 '400': 
                     description: 'invalid input, object invalid'
+                '503':
+                    description: 'service temporarily unavailable, retry later'
     
     /sensor/soil-moisture:
         post:
@@ -44,6 +46,8 @@ paths:
                     description: soil moisture reading successfully received
                 '400':
                     description: 'invalid input, object invalid'
+                '503':
+                    description: 'service temporarily unavailable, retry later'
 
 components:
     schemas:
