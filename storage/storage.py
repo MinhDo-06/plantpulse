@@ -4,6 +4,8 @@ from db import ENGINE
 from models import Base
 import connexion
 from connexion import NoContent
+from sqlalchemy.exc import SQLAlchemyError
+import functools
 
 from db import use_db_session
 from models import PrecipitationReading, SoilMoistureReading
@@ -16,6 +18,17 @@ logger = logging.getLogger("storage")
 def parse_after(after):
     return datetime.fromisoformat(after).astimezone(UTC).replace(tzinfo=None)
 
+def db_503(func):
+    @functools.wraps(func)
+    def wrapper (*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except SQLAlchemyError:
+            logger.exception("Database unavailable in %s", func.__name__)
+            return {"error": "temporarily unavailable"}, 503
+    return wrapper
+
+@db_503
 @use_db_session
 def get_precipitation_readings(sessions, after=None):
     query = select(PrecipitationReading).order_by(PrecipitationReading.recorded_timestamp)
@@ -25,6 +38,7 @@ def get_precipitation_readings(sessions, after=None):
     logger.debug("Found %d precipitation readings after %s", len(readings), after)
     return [r.to_json() for r in readings], 200
 
+@db_503
 @use_db_session
 def get_soil_moisture_readings(sessions, after=None):
     query = select(SoilMoistureReading).order_by(SoilMoistureReading.recorded_timestamp)

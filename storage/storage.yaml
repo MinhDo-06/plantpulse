@@ -34,6 +34,8 @@ paths:
                                 type: array
                                 items: 
                                     $ref: '#/components/schemas/PrecipitationReading'
+                '503':
+                    description: 'Database is unavailable'       
 
     /sensor/soil-moisture:
         get:
@@ -56,6 +58,8 @@ paths:
                                 type: array
                                 items:
                                     $ref: '#/components/schemas/SoilMoistureReading'
+                '503':
+                    description: 'Database is unavailable'
 
 components:
     schemas:
