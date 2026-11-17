@@ -52,7 +52,7 @@ Docker `restart: on-failure` retries it with backoff.
 | 1 | `restart: on-failure` on receiver, storage, processing | docker-compose.yml | ☑ verified: RestartCount climbs with Kafka down, self-recovers |
 | 2 | `unique=True` on `trace_id` (both models); needs `docker compose down -v` to rebuild tables | storage/models.py | ☑ verified: `SHOW INDEX` shows `trace_id, Non_unique=0` |
 | 3 | Idempotent producer config; `send` → `send_and_wait` in `asyncio.wait_for(..., 5)`; `KafkaError`/`TimeoutError` → 503 | receiver/receiver.py | ☑ verified: 201 healthy, 503 in ~5s with Kafka down (/status 200), 201 again after recovery |
-| 4 | `pool_pre_ping=True` on engine | storage/db.py | ☐ |
+| 4 | `pool_pre_ping=True` on engine | storage/db.py | ☑ verified: storage keeps polling (no errors) after `docker compose restart db` |
 | 5 | Catch DB errors on GET → 503 | storage/storage.py | ☐ |
 | 6 | `IntegrityError` → rollback + commit + skip; retry wrapper: 5 attempts, exponential backoff capped at 30s | storage/worker.py | ☐ |
 | 7 | Skip-cycle error handling | processing/processing.py | ☑ already implemented |
