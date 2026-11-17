@@ -5,7 +5,7 @@ import os
 import signal
 from datetime import UTC, datetime
 import time
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 
 import yaml
 from confluent_kafka import Consumer, KafkaException
@@ -102,7 +102,7 @@ def main():
                 value = json.loads(msg.value().decode("utf-8"))
                 if not isinstance(value, dict):
                     raise ValueError("not a JSON object")
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError, AttributeError):  # AttributeError: empty (tombstone) message
                 logger.error("Skipping malformed message at %s[%s]@%s",
                              msg.topic(), msg.partition(), msg.offset())
                 consumer.commit(msg)
@@ -116,6 +116,9 @@ def main():
             except IntegrityError:
                 logger.warning("Duplicate trace_id %s at %s[%s]@%s, skipping",
                                value.get("trace_id"), msg.topic(), msg.partition(), msg.offset())
+            except DataError as e:
+                logger.error("Skipping message with invalid data (%s) at %s[%s]@%s",
+                             e.orig, msg.topic(), msg.partition(), msg.offset())
             # anything else (DB down after 5 attempts) propagates: no commit, restart replays
             consumer.commit(msg)
     except KafkaException as ke:
