@@ -54,6 +54,6 @@ Docker `restart: on-failure` retries it with backoff.
 | 3 | Idempotent producer config; `send` → `send_and_wait` in `asyncio.wait_for(..., 5)`; `KafkaError`/`TimeoutError` → 503 | receiver/receiver.py | ☑ verified: 201 healthy, 503 in ~5s with Kafka down (/status 200), 201 again after recovery |
 | 4 | `pool_pre_ping=True` on engine | storage/db.py | ☑ verified: storage keeps polling (no errors) after `docker compose restart db` |
 | 5 | Catch DB errors on GET → 503 | storage/storage.py | ☑ verified: 503 with db stopped (no stack trace to client), 200 again after db restart |
-| 6 | `IntegrityError` → rollback + commit + skip; retry wrapper: 5 attempts, exponential backoff capped at 30s | storage/worker.py | ☐ |
+| 6 | `IntegrityError` → rollback + commit + skip; retry wrapper: 5 attempts, exponential backoff capped at 30s | storage/worker.py | ☑ verified: duplicate trace_id skipped (restarts 0); db down → retry, event stored once db back |
 | 7 | Skip-cycle error handling | processing/processing.py | ☑ already implemented |
 | 8 | No exception escapes as a stack trace (all services) | all | ☐ |

@@ -4,7 +4,8 @@ import logging.config
 import os
 import signal
 from datetime import UTC, datetime
-
+import time
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 import yaml
 from confluent_kafka import Consumer, KafkaException
@@ -48,6 +49,28 @@ def save_event(session, topic, value):
     session.commit()
     logger.debug("Stored event from '%s' with trace id of %s", topic, value["trace_id"])
 
+MAX_ATTEMPS = 5
+
+def save_with_retry(topic, value):
+    "Fresh session per new attemp"
+    for attempt in range(1, MAX_ATTEMPS + 1):
+        session = make_session()
+        try:
+            save_event(session, topic, value)
+            return
+        except OperationalError:
+            session.rollback()
+            if attempt == MAX_ATTEMPS:
+                raise
+            delay = min(2 ** attempt, 30)
+            logger.warning("DB unavailable (attempt %d/%d), retrying in %ds", attempt, MAX_ATTEMPS, delay)
+            time.sleep(delay)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
 
 def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
@@ -83,17 +106,14 @@ def main():
                 consumer.commit(msg)
                 continue
 
-            session = make_session()
             try:
-                save_event(session, msg.topic(), value)
+                save_with_retry(msg.topic(), value)
             except KeyError as e:
-                session.rollback()
                 logger.error("Skipping message missing field %s at offset %s", e, msg.offset())
-            except Exception:
-                session.rollback()
-                raise # DB problem: exit uncommited, restart re-reads the message
-            finally:
-                session.close()
+            except IntegrityError:
+                logger.warning("Duplicate trace_id %s at %s[%s]@%s, skipping",
+                               value.get("trace_id"), msg.topic(), msg.partition(), msg.offset())
+            # anything else (DB down after 5 attempts) propagates: no commit, restart replays
             consumer.commit(msg)
     except KafkaException as ke:
         logger.error("Kafka problem: %s", ke)
