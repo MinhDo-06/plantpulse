@@ -24,7 +24,7 @@ services:
       context: storage
       dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=mysql+pymysql://Minh:whitesox123@db:3306/weather
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
     depends_on:
       db:
         condition: service_healthy
@@ -39,7 +39,7 @@ services:
       context: storage
       dockerfile: Dockerfile.worker
     environment:
-      - DATABASE_URL=mysql+pymysql://Minh:whitesox123@db:3306/weather
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
       - KAFKA_BROKER=redpanda:9092
       - KAFKA_TOPIC_PRECIP=precipitation
       - KAFKA_TOPIC_SOIL=soil-moisture
@@ -78,13 +78,13 @@ services:
     image: mysql:8
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: 1
-      MYSQL_USER: Minh
-      MYSQL_PASSWORD: whitesox123
-      MYSQL_DATABASE: weather
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "-uMinh", "-pwhitesox123", "ping", "-h", "127.0.0.1"]
+      test: ["CMD", "mysqladmin", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}", "ping", "-h", "127.0.0.1"]
       interval: 10s
       timeout: 5s
       retries: 5

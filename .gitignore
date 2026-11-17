@@ -15,3 +15,6 @@ wheels/
 .pytest_cache/
 jmeter/results.jtl
 jmeter/report/
+
+# Secrets
+.env

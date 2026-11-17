@@ -3,7 +3,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-ENGINE = create_engine(os.getenv("DATABASE_URL", "mysql+pymysql://Minh:whitesox123@localhost:3306/weather"))
+ENGINE = create_engine(os.environ["DATABASE_URL"])
 
 
 def make_session():
