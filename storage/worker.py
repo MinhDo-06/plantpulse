@@ -100,6 +100,8 @@ def main():
 
             try: 
                 value = json.loads(msg.value().decode("utf-8"))
+                if not isinstance(value, dict):
+                    raise ValueError("not a JSON object")
             except (ValueError, UnicodeDecodeError):
                 logger.error("Skipping malformed message at %s[%s]@%s",
                              msg.topic(), msg.partition(), msg.offset())
@@ -108,8 +110,9 @@ def main():
 
             try:
                 save_with_retry(msg.topic(), value)
-            except KeyError as e:
-                logger.error("Skipping message missing field %s at offset %s", e, msg.offset())
+            except (KeyError, ValueError, TypeError) as e:
+                logger.error("Skipping bad message (%r) at %s[%s]@%s",
+                             e, msg.topic(), msg.partition(), msg.offset())
             except IntegrityError:
                 logger.warning("Duplicate trace_id %s at %s[%s]@%s, skipping",
                                value.get("trace_id"), msg.topic(), msg.partition(), msg.offset())

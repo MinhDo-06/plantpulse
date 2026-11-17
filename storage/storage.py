@@ -6,6 +6,8 @@ import connexion
 from connexion import NoContent
 from sqlalchemy.exc import SQLAlchemyError
 import functools
+from connexion.lifecycle import ConnexionResponse
+import json
 
 from db import use_db_session
 from models import PrecipitationReading, SoilMoistureReading
@@ -52,5 +54,11 @@ def get_status():
     return NoContent, 200
 
 Base.metadata.create_all(ENGINE)
+
+def internal_error(request, exc):
+    logger.exception("Unhandled error", exc_info=exc)
+    return ConnexionResponse(status_code=500, mimetype="application/json", body=json.dumps({"error": "internal error"}))
+
 app = connexion.AsyncApp(__name__, specification_dir='')
 app.add_api("storage.yaml", strict_validation=True, validate_responses=True)
+app.add_error_handler(Exception, internal_error)

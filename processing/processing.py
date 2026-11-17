@@ -7,6 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from connexion.lifecycle import ConnexionResponse
 
 import connexion
 import httpx
@@ -139,5 +140,12 @@ def get_status():
     return NoContent, 200
 
 
+def internal_error(request, exc):
+    logger.exception("Unhandled error", exc_info=exc)
+    return ConnexionResponse(status_code=500, mimetype="application/json",
+                             body=json.dumps({"error": "internal error"}))
+
+
 app = connexion.AsyncApp(__name__, specification_dir="", lifespan=lifespan)
 app.add_api("processing.yaml", strict_validation=True, validate_responses=True)
+app.add_error_handler(Exception, internal_error)

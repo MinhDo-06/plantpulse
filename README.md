@@ -56,4 +56,4 @@ Docker `restart: on-failure` retries it with backoff.
 | 5 | Catch DB errors on GET → 503 | storage/storage.py | ☑ verified: 503 with db stopped (no stack trace to client), 200 again after db restart |
 | 6 | `IntegrityError` → rollback + commit + skip; retry wrapper: 5 attempts, exponential backoff capped at 30s | storage/worker.py | ☑ verified: duplicate trace_id skipped (restarts 0); db down → retry, event stored once db back |
 | 7 | Skip-cycle error handling | processing/processing.py | ☑ already implemented |
-| 8 | No exception escapes as a stack trace (all services) | all | ☐ |
+| 8 | No exception escapes as a stack trace (all services) | all | ☑ verified: catch-all 500 JSON, trace in logs only; worker skips poison messages (restarts 0) |

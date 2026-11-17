@@ -11,6 +11,7 @@ import yaml
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaError
 from connexion import NoContent, request
+from connexion.lifecycle import ConnexionResponse
 
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "redpanda:9092")
 KAFKA_TOPIC_PRECIP = os.getenv("KAFKA_TOPIC_PRECIP", "precipitation")
@@ -68,5 +69,12 @@ async def get_status():
     return NoContent, 200
 
 
+def internal_error(request, exc):
+    logger.exception("Unhandled error", exc_info=exc)
+    return ConnexionResponse(status_code=500, mimetype="application/json",
+                             body=json.dumps({"error": "internal error"}))
+
+
 app = connexion.AsyncApp(__name__, specification_dir='', lifespan=lifespan)
 app.add_api("weather.yaml", strict_validation=True, validate_responses=True)
+app.add_error_handler(Exception, internal_error)
