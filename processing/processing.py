@@ -118,6 +118,12 @@ async def update_loop(client):
 @asynccontextmanager
 async def lifespan(app):
     client = httpx.AsyncClient(timeout=7.0)
+    try:
+        (await client.get(f"{STORAGE_URL}/status")).raise_for_status()
+    except httpx.HTTPError as e:
+        logger.critical("Storage unavailable, refusing to start: %r", e)
+        await client.aclose()
+        os._exit(1)  # sys.exit here would make the server print a stack trace
     task = asyncio.create_task(update_loop(client))
     logger.info("Background processing started, polling %s every %ds", STORAGE_URL, INTERVAL_SECONDS)
     try:

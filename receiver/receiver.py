@@ -33,7 +33,12 @@ async def lifespan(app):
         retry_backoff_ms=250,
         linger_ms=5,
     )
-    await producer.start() # Kafka down -> crash -> Docker restart 
+    try:
+        await producer.start()
+    except KafkaError as e:
+        logger.critical("Kafka unavailable, refusing to start: %s", e)
+        await producer.stop()
+        os._exit(1)  # sys.exit here would make the server print a stack trace
     try:
         yield{"kafka": producer}
     finally:
@@ -47,8 +52,8 @@ async def report_precipitation(body):
     payload = json.dumps(body).encode("utf-8")
     try:
         await asyncio.wait_for(producer.send_and_wait(KAFKA_TOPIC_PRECIP, payload), timeout=5)
-    except (KafkaError, asyncio.TimeoutError):
-        logger.exception("Kafka unavailable, rejecting 'precipitation' event ")
+    except (KafkaError, asyncio.TimeoutError) as e:
+        logger.error("Kafka unavailable, rejecting 'precipitation' event: %r | trace_id: %s", e, body["trace_id"])
         return {"error": "temporarily unavailable"}, 503
     return NoContent, 201
 
@@ -59,8 +64,8 @@ async def report_soil_moisture(body):
     payload = json.dumps(body).encode("utf-8")
     try:
         await asyncio.wait_for(producer.send_and_wait(KAFKA_TOPIC_SOIL, payload), timeout=5)
-    except (KafkaError, asyncio.TimeoutError):
-        logger.exception("Kafka unavailable, rejecting 'soil moisture' event")
+    except (KafkaError, asyncio.TimeoutError) as e:
+        logger.error("Kafka unavailable, rejecting 'soil moisture' event: %r | trace_id: %s", e, body["trace_id"])
         return {"error": "temporarily unavailable"}, 503
     return NoContent, 201
 

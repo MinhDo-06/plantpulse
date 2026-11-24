@@ -4,8 +4,9 @@ from db import ENGINE
 from models import Base
 import connexion
 from connexion import NoContent
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 import functools
+import sys
 from connexion.lifecycle import ConnexionResponse
 import json
 
@@ -25,8 +26,8 @@ def db_503(func):
     def wrapper (*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except SQLAlchemyError:
-            logger.exception("Database unavailable in %s", func.__name__)
+        except SQLAlchemyError as e:
+            logger.error("Database unavailable in %s: %s", func.__name__, getattr(e, "orig", e))
             return {"error": "temporarily unavailable"}, 503
     return wrapper
 
@@ -53,7 +54,11 @@ def get_soil_moisture_readings(sessions, after=None):
 def get_status():
     return NoContent, 200
 
-Base.metadata.create_all(ENGINE)
+try:
+    Base.metadata.create_all(ENGINE)
+except OperationalError as e:
+    logger.critical("Database unavailable, refusing to start: %s", e.orig)
+    sys.exit(1)
 
 def internal_error(request, exc):
     logger.exception("Unhandled error", exc_info=exc)

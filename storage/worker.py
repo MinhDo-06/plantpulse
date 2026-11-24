@@ -3,6 +3,7 @@ import logging
 import logging.config
 import os
 import signal
+import sys
 from datetime import UTC, datetime
 import time
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError
@@ -50,6 +51,7 @@ def save_event(session, topic, value):
     logger.debug("Stored event from '%s' with trace id of %s", topic, value["trace_id"])
 
 MAX_ATTEMPS = 5
+MYSQL_DUPLICATE_KEY = 1062
 
 def save_with_retry(topic, value):
     "Fresh session per new attemp"
@@ -74,7 +76,11 @@ def save_with_retry(topic, value):
 
 def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
-    Base.metadata.create_all(ENGINE)
+    try:
+        Base.metadata.create_all(ENGINE)
+    except OperationalError as e:
+        logger.critical("Database unavailable, refusing to start: %s", e.orig)
+        sys.exit(1)
 
     consumer = Consumer({
         "bootstrap.servers": KAFKA_BROKER,
@@ -84,10 +90,15 @@ def main():
 
     })
 
-    consumer.subscribe([TOPIC_PRECIP, TOPIC_SOIL])
-    logger.info("Storage worker listening on %s, %s", TOPIC_PRECIP, TOPIC_SOIL)
-
     try:
+        try:
+            consumer.list_topics(timeout=10)
+        except KafkaException as e:
+            logger.critical("Kafka unavailable, refusing to start: %s", e)
+            sys.exit(1)
+        consumer.subscribe([TOPIC_PRECIP, TOPIC_SOIL])
+        logger.info("Storage worker listening on %s, %s", TOPIC_PRECIP, TOPIC_SOIL)
+
         while True:
             msg = consumer.poll(timeout=1.0)
             if msg is None:
@@ -105,7 +116,7 @@ def main():
             except (ValueError, UnicodeDecodeError, AttributeError):  # AttributeError: empty (tombstone) message
                 logger.error("Skipping malformed message at %s[%s]@%s",
                              msg.topic(), msg.partition(), msg.offset())
-                consumer.commit(msg)
+                consumer.commit(message=msg, asynchronous=False)
                 continue
 
             try:
@@ -113,17 +124,24 @@ def main():
             except (KeyError, ValueError, TypeError) as e:
                 logger.error("Skipping bad message (%r) at %s[%s]@%s",
                              e, msg.topic(), msg.partition(), msg.offset())
-            except IntegrityError:
-                logger.warning("Duplicate trace_id %s at %s[%s]@%s, skipping",
-                               value.get("trace_id"), msg.topic(), msg.partition(), msg.offset())
+            except IntegrityError as e:
+                if e.orig and e.orig.args[0] == MYSQL_DUPLICATE_KEY:
+                    logger.warning("Duplicate trace_id %s at %s[%s]@%s, skipping",
+                                   value.get("trace_id"), msg.topic(), msg.partition(), msg.offset())
+                else:
+                    logger.error("Skipping message that violates a DB constraint (%s) at %s[%s]@%s",
+                                 e.orig, msg.topic(), msg.partition(), msg.offset())
             except DataError as e:
                 logger.error("Skipping message with invalid data (%s) at %s[%s]@%s",
                              e.orig, msg.topic(), msg.partition(), msg.offset())
-            # anything else (DB down after 5 attempts) propagates: no commit, restart replays
-            consumer.commit(msg)
+            except OperationalError as e:
+                # no commit: Docker restarts the worker and Kafka replays this message
+                logger.critical("Database unavailable after %d attempts, exiting: %s", MAX_ATTEMPS, e.orig)
+                sys.exit(1)
+            consumer.commit(message=msg, asynchronous=False)
     except KafkaException as ke:
-        logger.error("Kafka problem: %s", ke)
-        raise
+        logger.critical("Kafka problem, exiting: %s", ke)
+        sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Shutting down")
     finally:
