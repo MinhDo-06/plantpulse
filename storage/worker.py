@@ -9,7 +9,8 @@ import time
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 
 import yaml
-from confluent_kafka import Consumer, KafkaException
+from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka.admin import AdminClient, NewTopic
 
 from db import ENGINE, make_session
 from models import Base, PrecipitationReading, SoilMoistureReading
@@ -74,6 +75,19 @@ def save_with_retry(topic, value):
             session.close()
 
 
+def ensure_topics():
+    "Create the topics if the receiver has not yet, so the consumer group can join them"
+    admin = AdminClient({"bootstrap.servers": KAFKA_BROKER})
+    futures = admin.create_topics([NewTopic(t, num_partitions=1, replication_factor=1)
+                                   for t in (TOPIC_PRECIP, TOPIC_SOIL)])
+    for future in futures.values():
+        try:
+            future.result()
+        except KafkaException as e:
+            if e.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
+                raise
+
+
 def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
     try:
@@ -93,6 +107,7 @@ def main():
     try:
         try:
             consumer.list_topics(timeout=10)
+            ensure_topics()
         except KafkaException as e:
             logger.critical("Kafka unavailable, refusing to start: %s", e)
             sys.exit(1)

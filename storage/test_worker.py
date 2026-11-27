@@ -60,12 +60,35 @@ def raiser(exc):
 
 
 KAFKA_DOWN = KafkaException(KafkaError(KafkaError._TRANSPORT))
+ALREADY_EXISTS = KafkaException(KafkaError(KafkaError.TOPIC_ALREADY_EXISTS))
+
+
+class FakeFuture:
+    def __init__(self, error=None): self.error = error
+
+    def result(self):
+        if self.error:
+            raise self.error
+
+
+class FakeAdmin:
+    """Records create_topics calls; `errors` maps topic name -> exception."""
+
+    def __init__(self, errors=None, consumer=None):
+        self.errors, self.created, self.consumer = errors or {}, [], consumer
+
+    def create_topics(self, new_topics):
+        self.created.extend(t.topic for t in new_topics)
+        assert self.consumer is None or not self.consumer.subscribed  # must happen first
+        return {t.topic: FakeFuture(self.errors.get(t.topic)) for t in new_topics}
 
 
 @pytest.fixture
 def run(monkeypatch):
-    def _run(consumer, save=lambda topic, value: None, create_all=lambda engine: None):
+    def _run(consumer, save=lambda topic, value: None, create_all=lambda engine: None, admin=None):
+        admin = admin or FakeAdmin(consumer=consumer)
         monkeypatch.setattr(worker, "Consumer", lambda config: consumer)
+        monkeypatch.setattr(worker, "AdminClient", lambda config: admin)
         monkeypatch.setattr(worker, "save_with_retry", save)
         monkeypatch.setattr(worker.Base.metadata, "create_all", create_all)
         monkeypatch.setattr(worker.signal, "signal", lambda *a: None)
@@ -131,3 +154,27 @@ def test_refuses_to_start_without_db(run, caplog):
     assert e.value.code == 1
     assert not consumer.subscribed
     assert "refusing to start" in caplog.text
+
+
+def test_creates_both_topics_before_subscribing(run):
+    consumer = FakeConsumer()
+    admin = FakeAdmin(consumer=consumer)
+    run(consumer, admin=admin)
+    assert sorted(admin.created) == sorted([worker.TOPIC_PRECIP, worker.TOPIC_SOIL])
+    assert consumer.subscribed
+
+
+def test_existing_topics_are_not_an_error(run):
+    errors = {worker.TOPIC_PRECIP: ALREADY_EXISTS, worker.TOPIC_SOIL: ALREADY_EXISTS}
+    consumer = run(FakeConsumer(), admin=FakeAdmin(errors))
+    assert consumer.subscribed
+
+
+def test_refuses_to_start_if_topic_cannot_be_created(run, caplog):
+    consumer = FakeConsumer()
+    with pytest.raises(SystemExit) as e:
+        run(consumer, admin=FakeAdmin({worker.TOPIC_SOIL: KAFKA_DOWN}))
+    assert e.value.code == 1
+    assert not consumer.subscribed and consumer.closed
+    assert "refusing to start" in caplog.text
+    assert not any(r.exc_info for r in caplog.records)

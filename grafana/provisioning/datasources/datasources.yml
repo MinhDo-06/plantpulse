@@ -1,0 +1,33 @@
+apiVersion: 1
+
+# Loaded by Grafana on every start, so the data sources survive `docker compose down -v`.
+# ${...} values come from the grafana container's environment (set from .env in docker-compose.yml).
+datasources:
+  - name: prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  - name: loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+
+  - name: mysql
+    uid: mysql
+    type: mysql
+    access: proxy
+    url: db:3306
+    user: ${MYSQL_USER}
+    jsonData:
+      database: ${MYSQL_DATABASE}
+    secureJsonData:
+      password: ${MYSQL_PASSWORD}
+
+  - name: infinity
+    uid: infinity
+    type: yesoreyeram-infinity-datasource
+    access: proxy
